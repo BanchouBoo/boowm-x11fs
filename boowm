@@ -1,0 +1,158 @@
+#!/bin/sh
+
+die() {
+	printf "[\033[0;31mERROR\033[0m] %s\n" "$*" >&2
+	exit 1
+}
+
+usage() {
+	# get_extensions_list() {
+
+	# }
+cat << EOF
+usage: boowm [action] [wid] [args]
+	focus                      focus specified window
+	map          [true/false]  set window map status
+	ignore       [true/false]  set window ignore status
+	pos          [int] [int]   set x and y position of window
+	move         [int] [int]   add/subtract x and y position from window
+	size         [int] [int]   set width and height of window
+	stretch      [int] [int]   add/subtract width and height from window
+	swap         [wid]         swap the position and size of two windows
+	border_width [int]         set the border width of window
+	border_color [hex]         set the border color of window
+	stack        [raise/lower] move window to the top/bottom of stack
+
+	NOTE: you can use "focused" in place of a window ID
+EOF
+}
+
+parse_wid() {
+	# parse properly if path
+	wid=${1##*/}
+	wid=${wid%%/*}
+	# allow focused as shorthand for the focused window ID
+	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+
+	# case $value in
+	# 	0x????????) ;;
+	# 	*) die "Invalid window ID '$wid'" ;;
+	# esac
+}
+
+focus() {
+	[ $# -ne 1 ] && die "Expecting one argument: wid"
+	parse_wid "$1"
+	printf '%s\n' "$value" > "$X11FS/$wid/mapped" 2> /dev/null
+}
+
+map() {
+	[ $# -ne 2 ] && die "Expecting two arguments: wid, true/false"
+	parse_wid "$1"
+	value=$2
+	printf '%s\n' "$value" > "$X11FS/$wid/mapped" 2> /dev/null
+}
+
+ignore() {
+	[ $# -ne 2 ] && die "Expecting two arguments: wid, true/false"
+	parse_wid "$1"
+	value=$2
+	printf '%s\n' "$value" > "$X11FS/$wid/ignored" 2> /dev/null
+}
+
+pos() {
+	[ $# -ne 3 ] && die "Expecting three arguments: wid, x pos, y pos"
+	parse_wid "$1"
+	x=$2
+	y=$3
+	printf '%s %s\n' "$x" "$y" > "$X11FS/$wid/geometry/position" 2> /dev/null
+}
+
+move() {
+	[ $# -ne 3 ] && die "Expecting three arguments: wid, x offset, y offset"
+	parse_wid "$1"
+	read -r x y < "$X11FS/$wid/geometry/position"
+	x=$((x + $2))
+	y=$((y + $3))
+	pos "$wid" "$x" "$y"
+}
+
+size() {
+	[ $# -ne 3 ] && die "Expecting three arguments: wid, x size, y size"
+	parse_wid "$1"
+	w=$2
+	h=$3
+	printf '%s %s\n' "$w" "$h" > "$X11FS/$wid/geometry/size" 2> /dev/null
+}
+
+stretch() {
+	[ $# -ne 3 ] && die "Expecting three arguments: wid, x offset, y offset"
+	parse_wid "$1"
+	read -r w h < "$X11FS/$wid/geometry/size"
+	w=$((w + $2))
+	h=$((h + $3))
+	size "$wid" "$w" "$h"
+}
+
+geometry() {
+	[ $# -ne 5 ] && die "Expecting two arguments: wid, width, height, x offset, y offset"
+	parse_wid "$1"
+	w=$2
+	h=$3
+	x=$4
+	y=$5
+	printf '%s %s %s %s\n' "$w" "$h" "$x" "$y" > "$X11FS/$wid/geometry/all" 2> /dev/null
+}
+
+swap() {
+	[ $# -ne 2 ] && die "Expecting two arguments: wid 1, wid 2"
+	parse_wid "$1"
+	wid_a=$wid
+	parse_wid "$2"
+	wid_b=$wid
+	[ "$wid_a" = "$wid_b" ] && die "Cannot swap a window with itself"
+	read -r a_w a_h a_x a_y < "$X11FS/$wid_a/geometry/all"
+	read -r b_w b_h b_x b_y < "$X11FS/$wid_b/geometry/all"
+	geometry "$wid_a" "$b_w" "$b_h" "$b_x" "$b_y"
+	geometry "$wid_b" "$a_w" "$a_h" "$a_x" "$a_y"
+}
+
+border_width() {
+	[ $# -ne 2 ] && die "Expecting two arguments: wid, border width"
+	parse_wid "$1"
+	value=$2
+	[ "$value" -eq "$value" ] 2> /dev/null || die "'$value' is not a valid integer"
+	printf '%s\n' "$value" > "$X11FS/$wid/border/width" 2> /dev/null
+}
+
+border_color() {
+	[ $# -ne 2 ] && die "Expecting two arguments: wid, border color (hex)"
+	parse_wid "$1"
+	hex=${2#\#}
+	case $hex in
+		[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])
+			printf '%s\n' "$value" > "$X11FS/$wid/border/color" 2> /dev/null
+			;;
+		*)
+			die "'$hex' is an invalid hex color"
+			;;
+	esac
+}
+
+stack() {
+	[ $# -ne 2 ] && die "Expecting two arguments: wid, raise/lower"
+	parse_wid "$1"
+	value=$2
+	printf '%s\n' "$value" > "$X11FS/$wid/stack" 2> /dev/null
+}
+
+act=$1
+shift 1
+[ -t 0 ] || set -- $* $(cat)
+if command -v "boowm-$act" > /dev/null; then # extension exists
+	boowm-$act $*
+elif [ "$(command -V "$act")" = "$act is a shell function" ]; then # function in script exists
+	$act $*
+else
+	die "Unrecognized action '$act'"
+fi
