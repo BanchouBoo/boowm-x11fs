@@ -1,0 +1,181 @@
+#!/bin/sh
+
+tag_file="$TAGS/current"
+
+die() {
+	printf "[\033[0;31mERROR\033[0m] %s\n" "$*" >&2
+	exit 1
+}
+
+usage() {
+	cat << EOF
+usage
+EOF
+	exit
+}
+
+map() {
+	for wid_path; do
+		printf '%s\n' "true" > "$wid_path/mapped" 2> /dev/null
+	done
+}
+
+unmap() {
+	for wid_path; do
+		printf '%s\n' "false" > "$wid_path/mapped" 2> /dev/null
+	done
+}
+
+add_to_tag() {
+	ln -sfT "$X11FS/$1" "$TAGS/$2/$1"
+}
+
+remove_from_tag() {
+	rm "$TAGS/$2/$1"
+}
+
+remove_from_all() {
+	rm "$TAGS"/*/"$1"
+}
+
+set_to_tag() {
+	remove_from_all "$1"
+	add_to_tag "$1" "$2"
+}
+
+add_focus() {
+	[ -d "$TAGS/$1" ] || die "Tag '$1' does not exist"
+	new_tag="$1"
+	read -r tags < "$tag_file"
+	for tag in $tags; do
+		[ "$new_tag" -eq "$tag" ] && return
+	done
+	set -- $tags $new_tag
+	printf '%s' "$*" > "$tag_file"
+	# for map in "$TAGS/$new_tag"/*/mapped; do
+	# 	printf '%s\n' "true" > "$map" 2> /dev/null
+	# done
+	map "$TAGS/$new_tag"/*
+}
+
+remove_focus() {
+	[ -d "$TAGS/$1" ] || die "Tag '$1' does not exist"
+	rm_tag="$1"
+	read -r tags < "$tag_file"
+	for tag in $tags; do
+		[ "$rm_tag" -eq "$tag" ] && continue
+		new_tags="$new_tags $tag"
+	done
+	[ "$new_tags" ] || die "Must have at least one tag focused"
+	set -- $new_tags
+	printf '%s' "$*" > "$tag_file"
+	# for map in "$TAGS/$rm_tag"/*/mapped; do
+	# 	printf '%s\n' "false" > "$map" 2> /dev/null
+	# done
+	unmap "$TAGS/$rm_tag"/*
+}
+
+set_focus() {
+	[ -d "$TAGS/$1" ] || die "Tag '$1' does not exist"
+	read -r tags < "$tag_file"
+	for tag in $tags; do
+		[ "$1" -eq "$tag" ] && continue
+		# for map in "$TAGS/$tag"/*/mapped; do
+		# 	printf '%s\n' "false" > "$map" 2> /dev/null
+		# done
+		unmap "$TAGS/$tag"/*
+	done
+	printf '%s' "$1" > "$tag_file"
+	# for map in "$TAGS/$1"/*/mapped; do
+	# 	printf '%s\n' "true" > "$map" 2> /dev/null
+	# done
+	map "$TAGS/$1"/*
+}
+
+# remap() {
+# 	read -r tags < "$tag_file"
+# 	for tag in $tags; do
+# 		cd "$TAGS/$tag"
+# 		set -- $* *
+# 	done
+
+# 	notify-send "$*"
+# 	cd "$X11FS"
+# 	for wid in 0x*; do
+# 		case $* in
+# 			"0x*")
+# 				return
+# 				;;
+# 			"$wid")
+# 				printf "true\n" > "$X11FS/$wid/mapped"
+# 				;;
+# 			"0x"*)
+# 				printf "false\n" > "$X11FS/$wid/mapped"
+# 				;;
+# 		esac
+# 	done
+# }
+
+init() {
+	tag_list="$*"
+	[ "$tag_list" ] || die "Please pass a list of tags as arguments"
+	printf '%s' "${tag_list%% *}" > "$tag_file"
+	for tag in $tag_list; do
+		mkdir -p "$TAGS/$tag"
+	done
+}
+
+parse_event() {
+	event=$1
+	wid=$2
+	ignored=$3
+	$ignored && exit
+	case $event in
+		CREATE)
+			read -r tags < "$tag_file"
+			for tag in $tags; do
+				add_to_tag "$wid" "$tag"
+			done
+			;;
+
+		DESTROY)
+			remove_from_all "$wid"
+			;;
+	esac
+}
+
+act=$1
+[ "$act" ] || usage
+shift 1
+case $act in
+	init)
+		init $*
+		;;
+	events)
+		parse_event "$1" "$2" "$3"
+		;;
+	focus)
+		set_focus "$1"
+		;;
+	add_focus)
+		add_focus "$1"
+		;;
+	remove_focus)
+		remove_focus "$1"
+		;;
+	move)
+		set_to_tag "$1" "$2"
+		;;
+	add)
+		add_to_tag "$1" "$2"
+		;;
+	remove)
+		remove_from_tag "$1" "$2"
+		;;
+	help)
+		usage
+		;;
+	*)
+		die "Unrecognized action '$act'"
+		;;
+esac
