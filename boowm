@@ -43,7 +43,7 @@ parse_wid() {
 focus() {
 	[ $# -ne 1 ] && die "Expecting one argument: wid"
 	parse_wid "$1"
-	printf '%s\n' "$value" > "$X11FS/$wid/mapped" 2> /dev/null
+	printf '%s\n' "$wid" > "$X11FS/focused" 2> /dev/null
 }
 
 map() {
@@ -146,9 +146,29 @@ stack() {
 	printf '%s\n' "$value" > "$X11FS/$wid/stack" 2> /dev/null
 }
 
+close() {
+	[ $# -ne 1 ] && die "Expecting two arguments: wid"
+	parse_wid "$1"
+	rmdir "$X11FS/$wid"
+}
+
+events() {
+	events_file="${XDG_CONFIG_HOME:-$HOME/.config}/boowm/events"
+
+	while :; do
+		cat "$X11FS/event" | while read -r event wid; do
+			read -r ignored < "$X11FS/$wid/ignored"
+			# $ignored && continue
+			while read -r reader; do
+				$reader "$event" "$wid" "$ignored"
+			done < "$events_file"
+		done
+	done
+}
+
 act=$1
 shift 1
-[ -t 0 ] || set -- $* $(cat)
+[ -p /proc/self/fd/0 ] && set -- $* $(cat) # if pipe exists, append to args
 if command -v "boowm-$act" > /dev/null; then # extension exists
 	boowm-$act $*
 elif [ "$(command -V "$act")" = "$act is a shell function" ]; then # function in script exists
