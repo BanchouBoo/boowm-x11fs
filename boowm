@@ -147,9 +147,20 @@ stack() {
 }
 
 close() {
-	[ $# -ne 1 ] && die "Expecting two arguments: wid"
+	[ $# -ne 1 ] && die "Expecting one arguments: wid"
 	parse_wid "$1"
 	rmdir "$X11FS/$wid"
+}
+
+quit() {
+	pkill -x boowm
+}
+
+is_ignored() {
+	[ $# -ne 1 ] && die "Expecting one arguments: wid"
+	parse_wid "$1"
+	read -r ignored < "$X11FS/$wid/ignored"
+	$ignored && return 0 || return 1
 }
 
 events() {
@@ -157,10 +168,8 @@ events() {
 
 	while :; do
 		cat "$X11FS/event" | while read -r event wid; do
-			read -r ignored < "$X11FS/$wid/ignored"
-			# $ignored && continue
 			while read -r reader; do
-				$reader "$event" "$wid" "$ignored"
+				$reader "$event" "$wid"
 			done < "$events_file"
 		done
 	done
