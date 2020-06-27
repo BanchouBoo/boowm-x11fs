@@ -14,6 +14,14 @@ EOF
 	exit
 }
 
+is_active() {
+	read -r tags < "$tag_file"
+	for tag in $tags; do
+		[ "$1" = "$tag" ] && return 0
+	done
+	return 1
+}
+
 map() {
 	for wid_path; do
 		printf '%s\n' "true" > "$wid_path/mapped" 2> /dev/null
@@ -51,7 +59,7 @@ add_focus() {
 		[ "$new_tag" -eq "$tag" ] && return
 	done
 	set -- $tags $new_tag
-	printf '%s' "$*" > "$tag_file"
+	printf '%s\n' "$*" > "$tag_file"
 	# for map in "$TAGS/$new_tag"/*/mapped; do
 	# 	printf '%s\n' "true" > "$map" 2> /dev/null
 	# done
@@ -68,7 +76,7 @@ remove_focus() {
 	done
 	[ "$new_tags" ] || die "Must have at least one tag focused"
 	set -- $new_tags
-	printf '%s' "$*" > "$tag_file"
+	printf '%s\n' "$*" > "$tag_file"
 	# for map in "$TAGS/$rm_tag"/*/mapped; do
 	# 	printf '%s\n' "false" > "$map" 2> /dev/null
 	# done
@@ -85,7 +93,7 @@ set_focus() {
 		# done
 		unmap "$TAGS/$tag"/*
 	done
-	printf '%s' "$1" > "$tag_file"
+	printf '%s\n' "$1" > "$tag_file"
 	# for map in "$TAGS/$1"/*/mapped; do
 	# 	printf '%s\n' "true" > "$map" 2> /dev/null
 	# done
@@ -119,7 +127,7 @@ set_focus() {
 init() {
 	tag_list="$*"
 	[ "$tag_list" ] || die "Please pass a list of tags as arguments"
-	printf '%s' "${tag_list%% *}" > "$tag_file"
+	printf '%s\n' "${tag_list%% *}" > "$tag_file"
 	for tag in $tag_list; do
 		mkdir -p "$TAGS/$tag"
 	done
@@ -128,8 +136,7 @@ init() {
 parse_event() {
 	event=$1
 	wid=$2
-	ignored=$3
-	$ignored && exit
+	boowm is_ignored "$wid" && exit
 	case $event in
 		CREATE)
 			read -r tags < "$tag_file"
@@ -171,6 +178,9 @@ case $act in
 		;;
 	remove)
 		remove_from_tag "$1" "$2"
+		;;
+	is_active)
+		is_active "$1"
 		;;
 	help)
 		usage
