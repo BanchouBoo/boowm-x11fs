@@ -1,0 +1,175 @@
+#!/bin/sh
+
+# read -r screen_width  < "$X11FS/root/geometry/width"
+# read -r screen_height < "$X11FS/root/geometry/height"
+read -r screen_width screen_height < "$X11FS/root/geometry/size"
+outer_gaps=20
+screen_bounds_x=$((screen_width - (outer_gaps * 2)))
+screen_bounds_y=$((screen_height - (outer_gaps * 2)))
+cells_x=10
+cells_y=10
+win_gaps=5
+cell_width=$((screen_bounds_x / cells_x))
+cell_height=$((screen_bounds_y / cells_y))
+
+pos() {
+	wid=$1
+	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+	read -r win_w win_h o_x o_y < "$X11FS/$wid/geometry/all"
+	x=$2
+	min_x=$((outer_gaps))
+	max_x=$((screen_bounds_x - win_w))
+	x=$((x - (x % cell_width)))
+	# x=$((x < min_x ? min_x : x))
+	x=$((x > max_x ? max_x : x))
+	x=$((x + min_x))
+	# x=$((x + win_gaps))
+
+	y=$3
+	min_y=$((outer_gaps))
+	max_y=$((screen_bounds_y - win_h))
+	y=$((y - (y % cell_height)))
+	# y=$((y < min_y ? min_y : y))
+	y=$((y > max_y ? max_y : y))
+	y=$((y + min_y))
+	# y=$((y + win_gaps))
+
+	[ "$x" -ne "$o_x" ] || [ "$y" -ne "$o_y" ] &&
+		boowm pos "$wid" "$x" "$y"
+}
+
+move() {
+	wid=$1
+	x=$(($2 * cell_width))
+	y=$(($3 * cell_height))
+	boowm move "$wid" "$x" "$y"
+}
+
+left() {
+	wid=$1
+	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+	x=$outer_gaps
+	printf '%s\n' "$x" > "$X11FS/$wid/geometry/x"
+}
+
+right() {
+	wid=$1
+	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+	read -r win_w < "$X11FS/$wid/geometry/width"
+	x=$((screen_bounds_x - win_w))
+	printf '%s\n' "$x" > "$X11FS/$wid/geometry/x"
+}
+
+top() {
+	wid=$1
+	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+	y=$outer_gaps
+	printf '%s\n' "$y" > "$X11FS/$wid/geometry/y"
+}
+
+bottom() {
+	wid=$1
+	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+	read -r win_h < "$X11FS/$wid/geometry/height"
+	y=$((screen_bounds_y - win_h))
+	printf '%s\n' "$y" > "$X11FS/$wid/geometry/y"
+}
+
+topleft() {
+	wid=$1
+	x=$outer_gaps
+	y=$outer_gaps
+	boowm pos "$wid" "$x" "$y"
+}
+
+bottomleft() {
+	wid=$1
+	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+	x=$outer_gaps
+	read -r win_h < "$X11FS/$wid/geometry/height"
+	y=$((screen_bounds_y - win_h))
+	boowm pos "$wid" "$x" "$y"
+}
+
+topright() {
+	wid=$1
+	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+	read -r win_w < "$X11FS/$wid/geometry/width"
+	x=$((screen_bounds_x - win_w))
+	y=$outer_gaps
+	boowm pos "$wid" "$x" "$y"
+}
+
+bottomright() {
+	wid=$1
+	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+	read -r win_w win_h < "$X11FS/$wid/geometry/size"
+	x=$((screen_bounds_x - win_w))
+	y=$((screen_bounds_y - win_h))
+	boowm pos "$wid" "$x" "$y"
+}
+
+center() {
+	wid=$1
+	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+	screen_center_x=$((screen_width / 2))
+	screen_center_y=$((screen_height / 2))
+	read -r win_w win_h < "$X11FS/$wid/geometry/size"
+	x=$((screen_center_x - (win_w / 2)))
+	y=$((screen_center_y - (win_h / 2)))
+	pos "$wid" "$x" "$y"
+}
+
+size() {
+	wid=$1
+	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+	read -r o_w o_h win_x win_y < "$X11FS/$wid/geometry/all"
+
+	w=$(($2 - (win_x - cell_width)))
+	w=$((w - (w % cell_width)))
+	min_w=$((cell_width))
+	max_w=$(((screen_bounds_x + outer_gaps) - win_x))
+	w=$((w < min_w ? min_w : w))
+	w=$((w > max_w ? max_w : w))
+	# w=$((w + min_w))
+	# w=$((w - win_gaps * 2))
+
+	h=$(($3 - (win_y - cell_height)))
+	h=$((h - (h % cell_height)))
+	min_h=$((cell_height))
+	max_h=$(((screen_bounds_y + outer_gaps) - win_y))
+	h=$((h < min_h ? min_h : h))
+	h=$((h > max_h ? max_h : h))
+	# h=$((h + min_h))
+	# h=$((h - win_gaps * 2))
+
+	[ "$w" -ne "$o_w" ] || [ "$h" -ne "$o_h" ] &&
+		boowm size "$wid" "$w" "$h"
+}
+
+stretch() {
+	wid=$1
+	w=$(($2 * cell_width))
+	h=$(($3 * cell_height))
+	boowm stretch "$wid" "$w" "$h"
+}
+
+events() {
+	event=$1
+	wid=$2
+	boowm is_ignored "$wid" && exit
+	case $event in
+		CREATE)
+			read -r w h x y < "$X11FS/$wid/geometry/all"
+			pos "$wid" "$x" "$y"
+			size "$wid" "$w" "$h"
+			;;
+
+	esac
+}
+
+act=$1
+shift 1
+if [ "$(command -v "$act")" = "$act" ]; then # function in script exists
+	$act $*
+fi
