@@ -1,0 +1,23 @@
+#!/bin/sh
+
+rules_folder="${XDG_CONFIG_HOME:-$HOME/.config}/boowm/rules"
+event=$1
+[ "$event" = "CREATE" ] || exit
+wid=$2
+
+while read -r line; do
+	[ "$instance" ] &&
+		class=$line ||
+		instance=$line
+done < "$X11FS/$wid/class"
+read -r title < "$X11FS/$wid/title"
+win_info="$class:$instance:$title"
+
+for rule in "$rules_folder"/*:*:*; do
+	[ -e "$rule" ] || exit
+	case $win_info in
+		${rule##$rules_folder/})
+			sh "$rule" "$wid"
+			;;
+	esac
+done
