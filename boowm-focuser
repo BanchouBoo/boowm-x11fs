@@ -3,9 +3,10 @@
 event=$1
 wid=$2
 ignored=$3
-$ignored && exit
+boowm is_ignored "$wid" && exit
 case $event in
 	CREATE|ENTER)
 		boowm focus "$wid"
+		boowm stack "$wid" raise
 		;;
 esac
