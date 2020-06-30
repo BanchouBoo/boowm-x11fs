@@ -1,4 +1,5 @@
 #!/bin/sh
+# TODO: Rewrite
 
 tag_file="$TAGS/current"
 
@@ -60,9 +61,6 @@ add_focus() {
 	done
 	set -- $tags $new_tag
 	printf '%s\n' "$*" > "$tag_file"
-	# for map in "$TAGS/$new_tag"/*/mapped; do
-	# 	printf '%s\n' "true" > "$map" 2> /dev/null
-	# done
 	map "$TAGS/$new_tag"/*
 }
 
@@ -77,9 +75,6 @@ remove_focus() {
 	[ "$new_tags" ] || die "Must have at least one tag focused"
 	set -- $new_tags
 	printf '%s\n' "$*" > "$tag_file"
-	# for map in "$TAGS/$rm_tag"/*/mapped; do
-	# 	printf '%s\n' "false" > "$map" 2> /dev/null
-	# done
 	unmap "$TAGS/$rm_tag"/*
 }
 
@@ -88,41 +83,11 @@ set_focus() {
 	read -r tags < "$tag_file"
 	for tag in $tags; do
 		[ "$1" -eq "$tag" ] && continue
-		# for map in "$TAGS/$tag"/*/mapped; do
-		# 	printf '%s\n' "false" > "$map" 2> /dev/null
-		# done
 		unmap "$TAGS/$tag"/*
 	done
 	printf '%s\n' "$1" > "$tag_file"
-	# for map in "$TAGS/$1"/*/mapped; do
-	# 	printf '%s\n' "true" > "$map" 2> /dev/null
-	# done
 	map "$TAGS/$1"/*
 }
-
-# remap() {
-# 	read -r tags < "$tag_file"
-# 	for tag in $tags; do
-# 		cd "$TAGS/$tag"
-# 		set -- $* *
-# 	done
-
-# 	notify-send "$*"
-# 	cd "$X11FS"
-# 	for wid in 0x*; do
-# 		case $* in
-# 			"0x*")
-# 				return
-# 				;;
-# 			"$wid")
-# 				printf "true\n" > "$X11FS/$wid/mapped"
-# 				;;
-# 			"0x"*)
-# 				printf "false\n" > "$X11FS/$wid/mapped"
-# 				;;
-# 		esac
-# 	done
-# }
 
 init() {
 	tag_list="$*"
