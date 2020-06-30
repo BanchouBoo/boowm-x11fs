@@ -1,38 +1,48 @@
 #!/bin/sh
 
-# read -r screen_width  < "$X11FS/root/geometry/width"
-# read -r screen_height < "$X11FS/root/geometry/height"
+. "${XDG_CONFIG_HOME:-$HOME/.config}/boowm/settings"
+
 read -r screen_width screen_height < "$X11FS/root/geometry/size"
-outer_gaps=20
-screen_bounds_x=$((screen_width - (outer_gaps * 2)))
-screen_bounds_y=$((screen_height - (outer_gaps * 2)))
-cells_x=10
-cells_y=10
-win_gaps=5
+: "${outer_gaps:=0}"
+: "${win_gaps:=0}"
+: "${bar_size:=0}"
+: "${cells_x:=10}"
+: "${cells_y:=10}"
+screen_bounds_x=$((screen_width - (outer_gaps * 2) - win_gaps))
+screen_bounds_y=$((screen_height - (outer_gaps * 2) - win_gaps - bar_size))
 cell_width=$((screen_bounds_x / cells_x))
 cell_height=$((screen_bounds_y / cells_y))
+
+printf '%s\n' "$screen_bounds_x" "$cell_height" > "$HOME/stuff.txt"
+
+clamp() {
+	var=$1
+	min=$2
+	max=$3
+
+	: $(($var = $var < min ? min : $var))
+	: $(($var = $var > max ? max : $var))
+}
 
 pos() {
 	wid=$1
 	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
 	read -r win_w win_h o_x o_y < "$X11FS/$wid/geometry/all"
+	read -r border < "$X11FS/$wid/border/width"
+
 	x=$2
-	min_x=$((outer_gaps))
-	max_x=$((screen_bounds_x - win_w))
-	x=$((x - (x % cell_width)))
-	# x=$((x < min_x ? min_x : x))
-	x=$((x > max_x ? max_x : x))
-	x=$((x + min_x))
-	# x=$((x + win_gaps))
+	cx=$((x / cell_width))
+	max_cx=$((cells_x - ((win_w + (border * 2) + win_gaps) / cell_width)))
+	clamp cx 0 "$max_cx"
+	x=$((cx * cell_width))
+	x=$((x + outer_gaps + win_gaps))
 
 	y=$3
-	min_y=$((outer_gaps))
-	max_y=$((screen_bounds_y - win_h))
-	y=$((y - (y % cell_height)))
-	# y=$((y < min_y ? min_y : y))
-	y=$((y > max_y ? max_y : y))
-	y=$((y + min_y))
-	# y=$((y + win_gaps))
+	cy=$((y / cell_height))
+	max_cy=$((cells_y - ((win_h + (border * 2) + win_gaps) / cell_height)))
+	clamp cy 0 "$max_cy"
+	y=$((cy * cell_height))
+	y=$((y + outer_gaps + bar_size + win_gaps))
 
 	[ "$x" -ne "$o_x" ] || [ "$y" -ne "$o_y" ] &&
 		boowm pos "$wid" "$x" "$y"
@@ -124,24 +134,19 @@ size() {
 	wid=$1
 	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
 	read -r o_w o_h win_x win_y < "$X11FS/$wid/geometry/all"
+	read -r border < "$X11FS/$wid/border/width"
 
-	w=$(($2 - (win_x - cell_width)))
-	w=$((w - (w % cell_width)))
-	min_w=$((cell_width))
-	max_w=$(((screen_bounds_x + outer_gaps) - win_x))
-	w=$((w < min_w ? min_w : w))
-	w=$((w > max_w ? max_w : w))
-	# w=$((w + min_w))
-	# w=$((w - win_gaps * 2))
+	w=$(($2 - win_x + cell_width))
+	cw=$((w / cell_width))
+	clamp cw 1 "$cells_x"
+	w=$((cw * cell_width))
+	w=$((w - win_gaps - border * 2))
 
-	h=$(($3 - (win_y - cell_height)))
-	h=$((h - (h % cell_height)))
-	min_h=$((cell_height))
-	max_h=$(((screen_bounds_y + outer_gaps) - win_y))
-	h=$((h < min_h ? min_h : h))
-	h=$((h > max_h ? max_h : h))
-	# h=$((h + min_h))
-	# h=$((h - win_gaps * 2))
+	h=$(($3 - win_y + cell_height))
+	ch=$((h / cell_height))
+	clamp ch 1 "$cells_y"
+	h=$((ch * cell_height))
+	h=$((h - win_gaps - border * 2))
 
 	[ "$w" -ne "$o_w" ] || [ "$h" -ne "$o_h" ] &&
 		boowm size "$wid" "$w" "$h"
