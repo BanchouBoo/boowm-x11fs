@@ -5,11 +5,11 @@
 read -r screen_width screen_height < "$X11FS/root/geometry/size"
 : "${outer_gaps:=0}"
 : "${win_gaps:=0}"
-: "${bar_size:=0}"
+: "${bar_height:=0}"
 : "${cells_x:=10}"
 : "${cells_y:=10}"
 screen_bounds_x=$((screen_width - (outer_gaps * 2) - win_gaps))
-screen_bounds_y=$((screen_height - (outer_gaps * 2) - win_gaps - bar_size))
+screen_bounds_y=$((screen_height - (outer_gaps * 2) - win_gaps - bar_height))
 cell_width=$((screen_bounds_x / cells_x))
 cell_height=$((screen_bounds_y / cells_y))
 
@@ -42,7 +42,7 @@ pos() {
 	max_cy=$((cells_y - ((win_h + (border * 2) + win_gaps) / cell_height)))
 	clamp cy 0 "$max_cy"
 	y=$((cy * cell_height))
-	y=$((y + outer_gaps + bar_size + win_gaps))
+	y=$((y + outer_gaps + bar_height + win_gaps))
 
 	[ "$x" -ne "$o_x" ] || [ "$y" -ne "$o_y" ] &&
 		boowm pos "$wid" "$x" "$y"
