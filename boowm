@@ -131,7 +131,7 @@ border_color() {
 	hex=${2#\#}
 	case $hex in
 		[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])
-			printf '%s\n' "$value" > "$X11FS/$wid/border/color" 2> /dev/null
+			printf '%s\n' "$hex" > "$X11FS/$wid/border/color" 2> /dev/null
 			;;
 		*)
 			die "'$hex' is an invalid hex color"
