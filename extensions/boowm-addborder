@@ -1,0 +1,16 @@
+#!/bin/sh
+
+. "${XDG_CONFIG_HOME:-$HOME/.config}/boowm/settings"
+
+: "${border_width:=0}"
+: "${border_color_inactive:=cccccc}"
+
+event=$1
+wid=$2
+boowm is_ignored "$wid" && exit
+case $event in
+	CREATE)
+		boowm border_width "$wid" "$border_width"
+		boowm border_color "$wid" "$border_color_inactive"
+		;;
+esac
