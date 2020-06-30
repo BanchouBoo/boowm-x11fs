@@ -1,5 +1,7 @@
 #!/bin/sh
 
+hook_path="${XDG_CONFIG_HOME:-$HOME/.config}/boowm/hooks"
+
 die() {
 	printf "[\033[0;31mERROR\033[0m] %s\n" "$*" >&2
 	exit 1
@@ -34,15 +36,16 @@ parse_wid() {
 	# allow focused as shorthand for the focused window ID
 	[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
 
-	# case $value in
-	# 	0x????????) ;;
-	# 	*) die "Invalid window ID '$wid'" ;;
-	# esac
+	case $wid in
+		0x????????) ;;
+		*) die "Invalid window ID '$wid'" ;;
+	esac
 }
 
 focus() {
 	[ $# -ne 1 ] && die "Expecting one argument: wid"
 	parse_wid "$1"
+	"$hook_path"/focus "$wid" 2> /dev/null
 	printf '%s\n' "$wid" > "$X11FS/focused" 2> /dev/null
 }
 
