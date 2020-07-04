@@ -1,0 +1,34 @@
+#!/bin/sh
+
+wid=$1
+[ "$wid" = "focused" ] && read -r wid < "$X11FS/focused"
+eval $(xdotool getmouselocation --shell)
+
+read -r win_w win_h win_x win_y < "$X11FS/$wid/geometry/all"
+win_center_x=$((win_x + (win_w / 2)))
+win_center_y=$((win_y + (win_h / 2)))
+
+diff_x=$((X - win_center_x))
+diff_y=$((win_center_y - Y))
+
+[ ${diff_x#-} -gt ${diff_y#-} ] && {
+	case $diff_x in
+		-*)
+			o=left
+			;;
+		*)
+			o=right
+			;;
+	esac
+} || {
+	case $diff_y in
+		-*)
+			o=down
+			;;
+		*)
+			o=up
+			;;
+	esac
+}
+
+printf '%s\n' "$o"
