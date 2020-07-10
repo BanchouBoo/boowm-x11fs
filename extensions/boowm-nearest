@@ -1,66 +1,122 @@
 #!/bin/sh
 
-mapped_windows() {
-	for win in "$X11FS"/0x*; do
-		read -r ignored < "$win/ignored"
-		$ignored && continue
-		read -r mapped < "$win/mapped"
-		$mapped || continue
+right() {
+	pa_x=$((a_x + a_w))
+	pa_y=$((a_y + (a_h / 2)))
 
-		printf '%s\n' "${win##*/}"
-	done
+	pb_x=$b_x
+	pb_y=$((b_y + (b_h / 2)))
+
+	x_diff=$((pb_x - pa_x))
+	[ "$x_diff" -le "-$a_w" ] && return
+	y_diff=$((pa_y - pb_y))
+
+	dist_sq=$((
+		(x_diff * x_diff) +
+		(y_diff * y_diff)
+	))
+
+	if [ "$dist_sq" -lt "$smallest_diff" ] || [ "$smallest_diff" -lt 0 ]; then
+		smallest_diff=$dist_sq
+		nearest_wid=$wid
+	fi
+}
+
+left() {
+	pa_x=$a_x
+	pa_y=$((a_y + (a_h / 2)))
+
+	pb_x=$((b_x + b_w))
+	pb_y=$((b_y + (b_h / 2)))
+
+	x_diff=$((pb_x - pa_x))
+	[ "$x_diff" -ge "$a_w" ] && return
+	y_diff=$((pa_y - pb_y))
+
+	dist_sq=$((
+		(x_diff * x_diff) +
+		(y_diff * y_diff)
+	))
+
+	if [ "$dist_sq" -lt "$smallest_diff" ] || [ "$smallest_diff" -lt 0 ]; then
+		smallest_diff=$dist_sq
+		nearest_wid=$wid
+	fi
+}
+
+up() {
+	pa_x=$((a_x + (a_w / 2)))
+	pa_y=$a_y
+
+	pb_x=$((b_x + (b_w / 2)))
+	pb_y=$((b_y + b_h))
+
+	x_diff=$((pb_x - pa_x))
+	y_diff=$((pa_y - pb_y))
+	[ "$y_diff" -le "-$a_h" ] && return
+
+	dist_sq=$((
+		(x_diff * x_diff) +
+		(y_diff * y_diff)
+	))
+
+	if [ "$dist_sq" -lt "$smallest_diff" ] || [ "$smallest_diff" -lt 0 ]; then
+		smallest_diff=$dist_sq
+		nearest_wid=$wid
+	fi
+}
+
+down() {
+	pa_x=$((a_x + (a_w / 2)))
+	pa_y=$((a_y + a_h))
+
+	pb_x=$((b_x + (b_w / 2)))
+	pb_y=$b_y
+
+	x_diff=$((pb_x - pa_x))
+	y_diff=$((pa_y - pb_y))
+	[ "$y_diff" -ge "$a_h" ] && return
+
+	dist_sq=$((
+		(x_diff * x_diff) +
+		(y_diff * y_diff)
+	))
+
+	if [ "$dist_sq" -lt "$smallest_diff" ] || [ "$smallest_diff" -lt 0 ]; then
+		smallest_diff=$dist_sq
+		nearest_wid=$wid
+	fi
 }
 
 source_wid=$1
 [ "$source_wid" = "focused" ] && read -r source_wid < "$X11FS/focused"
 dir=$2
 
-update_nearest() {
-	main_axis_a=$1
-	main_axis_b=$2
-	alt_axis_a=$3
-	alt_axis_b=$4
-
-	main_diff=$(($main_axis_a - $main_axis_b))
-	[ "$main_diff" -le 0 ] && return
-	if [ "$main_diff" -lt "$smallest_diff" ] || [ "$smallest_diff" -lt 0 ]; then
-		smallest_diff=$main_diff
-		nearest_wid=$wid
-	elif [ "$main_diff" -eq "$smallest_diff" ]; then
-		read -r alt_axis_n < "$X11FS/$nearest_wid/geometry/${alt_axis_a#*_}"
-		alt_diff=$(($alt_axis_a - $alt_axis_b))
-		alt_diff=${alt_diff#-}
-		other_alt_diff=$(($alt_axis_a - alt_axis_n))
-		other_alt_diff=${other_alt_diff#-}
-		[ "$alt_diff" -lt "$other_alt_diff" ] && nearest_wid=$wid
-	fi
-}
-
-read -r a_x a_y < "$X11FS/$source_wid/geometry/position"
+read -r a_w a_h a_x a_y < "$X11FS/$source_wid/geometry/all"
 smallest_diff=-1
 nearest_wid=""
 for wid in "$X11FS"/0x*; do
 	wid=${wid##*/}
 
-	[ "$wid" = "$source_wid" ]
+	[ "$wid" = "$source_wid" ] && continue
 	read -r ignored < "$X11FS/$wid/ignored"
 	$ignored && continue
 	read -r mapped < "$X11FS/$wid/mapped"
 	$mapped || continue
 
-	read -r b_x b_y < "$X11FS/$wid/geometry/position"
+	read -r b_w b_h b_x b_y < "$X11FS/$wid/geometry/all"
 	case $dir in
 		left|west)
-			update_nearest a_x b_x a_y b_y
+			left
 			;;
 		right|east)
-			update_nearest b_x a_x a_y b_y
+			right
 			;;
 		up|north)
-			update_nearest a_y b_y a_x b_x
+			up
 			;;
 		down|south)
-			update_nearest b_y a_y a_x b_x
+			down
 			;;
 	esac
 done
