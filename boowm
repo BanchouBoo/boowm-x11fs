@@ -46,21 +46,21 @@ focus() {
 	[ $# -ne 1 ] && die "Expecting one argument: wid"
 	parse_wid "$1"
 	"$hook_path"/focus "$wid" 2> /dev/null
-	printf '%s\n' "$wid" > "$X11FS/focused" 2> /dev/null
+	printf '%s\n' "$wid" > "$X11FS/focused" 2> /dev/null &
 }
 
 map() {
 	[ $# -ne 2 ] && die "Expecting two arguments: wid, true/false"
 	parse_wid "$1"
 	value=$2
-	printf '%s\n' "$value" > "$X11FS/$wid/mapped" 2> /dev/null
+	printf '%s\n' "$value" > "$X11FS/$wid/mapped" 2> /dev/null &
 }
 
 ignore() {
 	[ $# -ne 2 ] && die "Expecting two arguments: wid, true/false"
 	parse_wid "$1"
 	value=$2
-	printf '%s\n' "$value" > "$X11FS/$wid/ignored" 2> /dev/null
+	printf '%s\n' "$value" > "$X11FS/$wid/ignored" 2> /dev/null &
 }
 
 pos() {
@@ -68,7 +68,7 @@ pos() {
 	parse_wid "$1"
 	x=$2
 	y=$3
-	printf '%s %s\n' "$x" "$y" > "$X11FS/$wid/geometry/position" 2> /dev/null
+	printf '%s %s\n' "$x" "$y" > "$X11FS/$wid/geometry/position" 2> /dev/null &
 }
 
 move() {
@@ -85,7 +85,7 @@ size() {
 	parse_wid "$1"
 	w=$2
 	h=$3
-	printf '%s %s\n' "$w" "$h" > "$X11FS/$wid/geometry/size" 2> /dev/null
+	printf '%s %s\n' "$w" "$h" > "$X11FS/$wid/geometry/size" 2> /dev/null &
 }
 
 stretch() {
@@ -104,7 +104,7 @@ geometry() {
 	h=$3
 	x=$4
 	y=$5
-	printf '%s %s %s %s\n' "$w" "$h" "$x" "$y" > "$X11FS/$wid/geometry/all" 2> /dev/null
+	printf '%s %s %s %s\n' "$w" "$h" "$x" "$y" > "$X11FS/$wid/geometry/all" 2> /dev/null &
 }
 
 swap() {
@@ -114,10 +114,11 @@ swap() {
 	parse_wid "$2"
 	wid_b=$wid
 	[ "$wid_a" = "$wid_b" ] && die "Cannot swap a window with itself"
-	read -r a_w a_h a_x a_y < "$X11FS/$wid_a/geometry/all"
-	read -r b_w b_h b_x b_y < "$X11FS/$wid_b/geometry/all"
-	geometry "$wid_a" "$b_w" "$b_h" "$b_x" "$b_y"
-	geometry "$wid_b" "$a_w" "$a_h" "$a_x" "$a_y"
+
+	read -r g_a < "$X11FS/$wid_a/geometry/all"
+	read -r g_b < "$X11FS/$wid_b/geometry/all"
+	geometry "$wid_a" $g_b
+	geometry "$wid_b" $g_a
 }
 
 border_width() {
@@ -125,7 +126,7 @@ border_width() {
 	parse_wid "$1"
 	value=$2
 	[ "$value" -eq "$value" ] 2> /dev/null || die "'$value' is not a valid integer"
-	printf '%s\n' "$value" > "$X11FS/$wid/border/width" 2> /dev/null
+	printf '%s\n' "$value" > "$X11FS/$wid/border/width" 2> /dev/null &
 }
 
 border_color() {
@@ -134,7 +135,7 @@ border_color() {
 	hex=${2#\#}
 	case $hex in
 		[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])
-			printf '%s\n' "$hex" > "$X11FS/$wid/border/color" 2> /dev/null
+			printf '%s\n' "$hex" > "$X11FS/$wid/border/color" 2> /dev/null &
 			;;
 		*)
 			die "'$hex' is an invalid hex color"
@@ -146,7 +147,7 @@ stack() {
 	[ $# -ne 2 ] && die "Expecting two arguments: wid, raise/lower"
 	parse_wid "$1"
 	value=$2
-	printf '%s\n' "$value" > "$X11FS/$wid/stack" 2> /dev/null
+	printf '%s\n' "$value" > "$X11FS/$wid/stack" 2> /dev/null &
 }
 
 close() {
