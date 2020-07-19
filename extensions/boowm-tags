@@ -15,98 +15,158 @@ EOF
 	exit
 }
 
-is_active() {
-	read -r tags < "$tag_file"
-	for tag in $tags; do
-		[ "$1" = "$tag" ] && return 0
+get_bit() {
+	e=$(($1 - 1))
+
+	while [ "$e" -gt 0 ]; do
+		[ "$bit" ] &&
+			: $((bit *= 2)) ||
+			bit=2
+		: $((e -= 1))
 	done
-	return 1
+
+	[ "$bit" ] || bit=1
+}
+
+apply_mask() {
+	printf '%d\n' "$1" > "$tag_file"
+}
+
+has_bit() {
+	[ "$bit" ] || get_bit "$1"
+	return $(((mask & bit) == 0))
+}
+
+set_bit() {
+	get_bit "$1"
+	apply_mask "$bit"
+}
+
+add_bit() {
+	read -r mask < "$tag_file"
+	get_bit "$1"
+	has_bit || {
+		: $((mask |= bit))
+		apply_mask "$mask"
+	}
+}
+
+rm_bit() {
+	read -r mask < "$tag_file"
+	get_bit "$1"
+	has_bit && {
+		: $((mask ^= bit))
+		apply_mask "$mask"
+	}
+}
+
+is_active() {
+	read -r mask < "$tag_file"
+	has_bit "$1"
+}
+
+win_is_active() {
+	for tag in "$TAGS"/*/"$1"; do
+		[ "$tag" = "$TAGS/*/$1" ] && return 1 # not in any tag
+		tag=${tag%/*}
+		tag=${tag##*/}
+		is_active "$tag" && return 0 # in a focused tag
+	done
+	return 1 # not in a focused tag
 }
 
 map() {
+	[ "${1#*\*}" != "$1" ] && return
 	for wid_path; do
 		printf '%s\n' "true" > "$wid_path/mapped" 2> /dev/null
 	done
 }
 
 unmap() {
+	[ "${1#*\*}" != "$1" ] && return
 	for wid_path; do
 		printf '%s\n' "false" > "$wid_path/mapped" 2> /dev/null
 	done
 }
 
-add_to_tag() {
+add() {
 	ln -sfT "$X11FS/$1" "$TAGS/$2/$1"
 }
 
-remove_from_tag() {
-	rm "$TAGS/$2/$1"
+rm() {
+	[ -d  "$TAGS/$2/$1" ] || return
+	command rm "$TAGS/$2/$1"
+	win_is_active "$1" || boowm map "$1" false
 }
 
-remove_from_all() {
+rm_from_all() {
 	rm "$TAGS"/*/"$1"
 }
 
-set_to_tag() {
-	remove_from_all "$1"
-	add_to_tag "$1" "$2"
+move() {
+	rm_from_all "$1"
+	add "$1" "$2"
 }
 
 add_focus() {
 	[ -d "$TAGS/$1" ] || die "Tag '$1' does not exist"
-	new_tag="$1"
-	read -r tags < "$tag_file"
-	for tag in $tags; do
-		[ "$new_tag" -eq "$tag" ] && return
-	done
-	set -- $tags $new_tag
-	printf '%s\n' "$*" > "$tag_file"
-	map "$TAGS/$new_tag"/*
+	add_bit "$1"
+	map "$TAGS/$1"/*
 }
 
-remove_focus() {
+rm_focus() {
 	[ -d "$TAGS/$1" ] || die "Tag '$1' does not exist"
-	rm_tag="$1"
-	read -r tags < "$tag_file"
-	for tag in $tags; do
-		[ "$rm_tag" -eq "$tag" ] && continue
-		new_tags="$new_tags $tag"
+	rm_bit "$1"
+	# unmap "$TAGS/$1"/*
+	for win in "$TAGS/$1"/*; do
+		[ "$win" = "$TAGS/$1/*" ] && continue
+		win=${win##*/}
+		# win_is_active "$win" || boowm map "$win" false
+		win_is_active "$win" || boowm map "$win" false
+		notify-send "$1"
 	done
-	[ "$new_tags" ] || die "Must have at least one tag focused"
-	set -- $new_tags
-	printf '%s\n' "$*" > "$tag_file"
-	unmap "$TAGS/$rm_tag"/*
 }
 
-set_focus() {
+focus() {
 	[ -d "$TAGS/$1" ] || die "Tag '$1' does not exist"
-	read -r tags < "$tag_file"
-	for tag in $tags; do
-		[ "$1" -eq "$tag" ] && continue
-		unmap "$TAGS/$tag"/*
+	read -r mask < "$tag_file"
+	val=1
+	index=1
+	while [ "$val" -le "$mask" ]; do
+		[ "$index" -eq "$1" ] || {
+			[ $((val & mask)) -gt 0 ] &&
+				unmap "$TAGS/$index"/*
+		}
+		: $((index+=1))
+		: $((val*=2))
 	done
-	printf '%s\n' "$1" > "$tag_file"
+	set_bit "$1"
 	map "$TAGS/$1"/*
 }
 
 init() {
-	tag_list="$*"
-	[ "$tag_list" ] || die "Please pass a list of tags as arguments"
-	printf '%s\n' "${tag_list%% *}" > "$tag_file"
-	for tag in $tag_list; do
-		mkdir -p "$TAGS/$tag"
-	done
+	[ "$1" -gt 0 ] && {
+		printf '%d\n' "1" > "$tag_file"
+		for tag in $(seq "$1"); do
+			mkdir -p "$TAGS/$tag"
+		done
+	}
 }
 
-parse_event() {
+events() {
 	event=$1
 	wid=$2
 	boowm is_ignored "$wid" && exit
 	case $event in
 		CREATE)
-			read -r tags < "$tag_file"
-			for tag in $tags; do
-				add_to_tag "$wid" "$tag"
+			read -r mask < "$tag_file"
+			val=1
+			index=1
+			while [ "$val" -le "$mask" ]; do
+				[ $((val & mask)) -gt 0 ] &&
+					add "$wid" "$index"
+				: $((index+=1))
+				: $((val*=2))
 			done
 			;;
 
@@ -117,40 +177,7 @@ parse_event() {
 }
 
 act=$1
-[ "$act" ] || usage
 shift 1
-case $act in
-	init)
-		init $*
-		;;
-	events)
-		parse_event "$1" "$2" "$3"
-		;;
-	focus)
-		set_focus "$1"
-		;;
-	add_focus)
-		add_focus "$1"
-		;;
-	remove_focus)
-		remove_focus "$1"
-		;;
-	move)
-		set_to_tag "$1" "$2"
-		;;
-	add)
-		add_to_tag "$1" "$2"
-		;;
-	remove)
-		remove_from_tag "$1" "$2"
-		;;
-	is_active)
-		is_active "$1"
-		;;
-	help)
-		usage
-		;;
-	*)
-		die "Unrecognized action '$act'"
-		;;
-esac
+if [ "$(command -V "$act")" = "$act is a shell function" ]; then # function in script exists
+	$act $*
+fi
